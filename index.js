@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const { Server } = require('socket.io')
 const cors = require('cors');
+const { timeStamp } = require('console');
 
 const app = express();
 app.use(cors);
@@ -22,15 +23,112 @@ const io = new Server(server, {
 const users = [];
 const messages = {};
 const rooms = [];
-const maxWaitTime = 300; //in seconds
+const maxWaitTime = 10; //in seconds
+
 const questions = [
     {
         countryCode: 'in',
         totalLetters: 5,
-        hind: 'I-N--A',
+        hint: 'I-N--A',
         ans: 'INDIA',
+        maxTime:10,
+        id:0,
+        timedOut: false,
+        userAnswers: [],
+    },
+    {
+        countryCode: 'us',
+        totalLetters: 6,
+        hint: 'U--T-D',
+        ans: 'UNITED',
+        maxTime:10,
+        id:1,
+        timedOut: false,
+        userAnswers: [],
+    },
+    {
+        countryCode: 'uk',
+        totalLetters: 7,
+        hint: 'E-G-A-D',
+        ans: 'ENGLAND',
+        maxTime:10,
+        id:2,
+        timedOut: false,
+        userAnswers: [],
+    },
+    {
+        countryCode: 'ca',
+        totalLetters: 6,
+        hint: 'C-N-D-',
+        ans: 'CANADA',
+        maxTime:10,
+        id:3,
+        timedOut: false,
+        userAnswers: [],
+    },
+    {
+        countryCode: 'au',
+        totalLetters: 9,
+        hint: 'A-S-R-L-A',
+        ans: 'AUSTRALIA',
+        maxTime:10,
+        id:4,
+        timedOut: false,
+        userAnswers: [],
+    },
+    {
+        countryCode: 'fr',
+        totalLetters: 6,
+        hint: 'F-A-C-',
+        ans: 'FRANCE',
+        maxTime:10,
+        id:5,
+        timedOut: false,
+        userAnswers: [],
+    },
+    {
+        countryCode: 'de',
+        totalLetters: 7,
+        hint: 'G-R-A-Y',
+        ans: 'GERMANY',
+        maxTime:10,
+        id:6,
+        timedOut: false,
+        userAnswers: [],
+    },
+    {
+        countryCode: 'jp',
+        totalLetters: 5,
+        hint: 'J-P-N-',
+        ans: 'JAPAN',
+        maxTime:10,
+        id:7,
+        timedOut: false,
+        userAnswers: [],
+    },
+    {
+        countryCode: 'it',
+        totalLetters: 5,
+        hint: 'I-A-Y',
+        ans: 'ITALY',
+        maxTime:10,
+        id:8,
+        timedOut: false,
+        userAnswers: [],
+    },
+    {
+        countryCode: 'br',
+        totalLetters: 6,
+        hint: 'B-A-I-',
+        ans: 'BRAZIL',
+        maxTime:10,
+        id:9,
+        timedOut: false,
+        userAnswers: [],
     }
-]
+];
+const results = [];
+
 
 io.on('connection', (socket)=>{
     console.log('new user connection requested..', socket.id)
@@ -41,7 +139,7 @@ io.on('connection', (socket)=>{
         //expected.. username, roomId
         const user = {
             username,
-            socketId:socket.id
+            socketId:socket.id,
         }
 
     
@@ -80,6 +178,7 @@ io.on('connection', (socket)=>{
                  startsIn:null,
                  gameStarted: false,
                  messages: [],
+                 question:{},
              }
              rooms.push(room);
              socket.join(roomName);
@@ -92,22 +191,35 @@ io.on('connection', (socket)=>{
                 diff = maxWaitTime-Math.floor(Math.abs(new Date() - room.countStartedAt)/1000);
                 if(!room.gameStarted && diff <= 1){
                     room.gameStarted = true;
-                    startQuestionInterval();
+                    startQuestionInterval(room.roomName);
                     room.startsIn = 0;
                     io.in(room.roomName).emit('room-update', room);
-                    clearInterval(interval);
                 }
             })
         },1000);
 
-        function startQuestionInterval(){
+
+        function startQuestionInterval(roomName){
+            const room = rooms.find(r=>r.roomName == roomName);
+
+            console.log('room name.. is', roomName, JSON.stringify(room));
+            room.question = questions[0];
+            io.in(roomName).emit('question-update', questions[0]);
+
             const interval = setInterval(()=>{
+                let lastQuestion = room?.question;
+                if(lastQuestion && lastQuestion.id < 9){
+                    room.question = questions[lastQuestion.id+1];
+                    io.in(roomName).emit('question-update', questions[lastQuestion.id+1]);
+                }
+
+                if(lastQuestion && lastQuestion.id == 9){
+                    io.in(roomName).emit('game-end');
+                    clearInterval(interval);
+                }
                 
-            },10000)
-        }
-
-
-        
+            },10000);
+        }        
     });
 
     socket.on('user-message', ({content, to, sender})=>{
@@ -124,6 +236,44 @@ io.on('connection', (socket)=>{
         }
        
     })
+
+    socket.on('ans-update', ({ ans, questionId, socketId, roomName }) => {
+        // Find the room by roomName
+        let room = rooms.find(r => r.roomName == roomName);
+        if (!room) return;
+    
+        // Find the user by socketId in the room
+        let userIndex = room.users.findIndex(usr => usr.socketId == socketId);
+        if (userIndex === -1) return;
+    
+        let question = questions[questionId];
+    
+        // Check if the answer is correct
+        if (question.ans.toLowerCase() == ans.toLowerCase()) {
+            // Check if the user has already answered
+            if (!question.userAnswers.find(answer => answer.username === room.users[userIndex].username)) {
+                // Update the user's score and answer
+                let scoreToAdd;
+                if (question.userAnswers.length === 0) {
+                    scoreToAdd = 100;
+                } else if (question.userAnswers.length === 1) {
+                    scoreToAdd = 70;
+                } else if (question.userAnswers.length === 2) {
+                    scoreToAdd = 50;
+                }
+    
+                room.users[userIndex].score = (room.users[userIndex].score ?? 0) + scoreToAdd;
+                room.users[userIndex].answers = [...(room.users[userIndex].answers ?? []), { questionId, ans, timeStamp: new Date() }];
+                
+                // Add to question's userAnswers
+                question.userAnswers.push({ username: room.users[userIndex].username, ans });
+    
+                // Broadcast the updated users to the room
+                io.in(roomName).emit('user-update', { users: room.users });
+            }
+        }
+    });
+    
 
     socket.on('disconnect', ()=>{
         //check users list for all rooms and remove user from there

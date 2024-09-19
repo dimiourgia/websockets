@@ -6,8 +6,8 @@ import './App.css'
 const sampleRoom = {
   roomName: 'room1',
   users: [
-    {username: 'Ajay Singh', socketId: '124544', score: 0, answers: [{questionId: 0, answer:'India', timeStamp:'100'}]},
-    {username: 'Aaman Singh', socketId: '124844', score: 0, answers: [{questionId: 0, answer:'India', timeStamp: '150'}]},
+    {username: 'Ajay Singh', socketId: '124544', score: 0, answers: [{questionId: 0, ans:'India', timeStamp:'100'}]},
+    {username: 'Aaman Singh', socketId: '124844', score: 0, answers: [{questionId: 0, ans:'India', timeStamp: '150'}]},
   ],
   gameStarted: true,
   startsIn: 300,
@@ -28,7 +28,7 @@ const sampleRoom = {
 function App() {
   const [count, setCount] = useState(0)
   const [username, setUsername] = useState('');
-  const [room, setRoom] = useState(sampleRoom);
+  const [room, setRoom] = useState();
   const [message, setMessage] = useState('');
 
   const [timer, setTimer] = useState(null);
@@ -38,6 +38,10 @@ function App() {
   useEffect(()=>{
     return ()=>socket.close();
   },[]);
+
+  useEffect(()=>{
+    console.log(JSON.stringify(room?.users), 'users..');
+  },[room?.users])
 
 
   const createConnection = ()=>{
@@ -59,6 +63,13 @@ function App() {
     socket.on('question-update', (message)=>{
       setRoom(pre=>({...pre, question:message}))
     } );
+    socket.on('user-update', ({users})=>{
+      setRoom(pre=>({...pre, users}))
+    })
+
+    socket.on('game-end', ()=>{
+      setRoom(pre=>({...pre, ended:true}))
+    })
   }
 
   useEffect(()=>{
@@ -81,7 +92,8 @@ function App() {
     console.log('handling key down')
     if(e.code == 'Enter'){
       console.log(ansRef.current.value)
-      socket.emit('ans-update', {ans: ansRef.current.value} )
+      socket.emit('ans-update', {ans: ansRef.current.value, questionId: room.question.id, socketId:socket.id, roomName:room.roomName});
+      ansRef.current.value = '';
     }
   }
 
@@ -139,11 +151,15 @@ function App() {
           </div>
           </div>}
       </div>}
-      {room && room?.gameStarted && <div style={{width:'400px', minHeight:'500px'}}>
-        Game Started 
+      {room && room?.gameStarted && <div> 
+        {/* user scores */}
+        {room?.users && <div style={{display:'flex', flexDirection:'column', gap:'4px'}}>
+            {room.users.map(user=><span>{user.username}-{user.score}</span>)}
+          </div>}
         {/* questions section */}
-        {room?.question && <div>
-          <QuestionTimer timeLeft={room?.question?.maxTime} />
+        {room?.question && !room.ended && <div style={{width:'400px', minHeight:'500px'}}>
+        Game Started
+          <QuestionTimer timeLeft={room?.question?.maxTime} questionId={room?.question?.id} />
           <span className={`flag flag-${room?.question?.countryCode}`} />
           <p>{room?.question?.hint}</p>
           <input ref={ansRef} style={{height:'30px', fontSize:'15px'}} onKeyDown={handleKeydown} />
@@ -167,7 +183,7 @@ const Timer = ({ startsIn }) => {
   useEffect(() => {
     setTimer(startsIn);
     const interval = setInterval(() => {
-      setTimer((prev) => prev - 1);
+      setTimer((prev) => prev > 0 ? prev - 1 : prev);
     }, 1000);
 
     return () => clearInterval(interval);
@@ -176,17 +192,17 @@ const Timer = ({ startsIn }) => {
   return <h3>Game starts in {timer}</h3>;
 };
 
-const QuestionTimer = ({timeLeft})=>{
+const QuestionTimer = ({timeLeft, questionId})=>{
   const [timer, setTimer] = useState(timeLeft);
 
   useEffect(() => {
     setTimer(timeLeft);
     const interval = setInterval(() => {
-      setTimer((prev) => prev - 1);
+      setTimer((prev) => prev > 0 ? prev - 1 : prev);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeLeft]);
+  }, [timeLeft, questionId]);
 
   return <h3>{timer}</h3>;
 }
