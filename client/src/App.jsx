@@ -6,8 +6,8 @@ import './App.css'
 const sampleRoom = {
   roomName: 'room1',
   users: [
-    {username: 'Ajay Singh', socketId: '124544'},
-    {username: 'Aaman Singh', socketId: '124844'},
+    {username: 'Ajay Singh', socketId: '124544', score: 0, answers: [{questionId: 0, answer:'India', timeStamp:'100'}]},
+    {username: 'Aaman Singh', socketId: '124844', score: 0, answers: [{questionId: 0, answer:'India', timeStamp: '150'}]},
   ],
   gameStarted: true,
   startsIn: 300,
@@ -20,17 +20,20 @@ const sampleRoom = {
     countryCode: 'in',
     totalLetters: 5,
     hint: 'I-D--',
+    maxTime: 1000,
+    questionId: 0,
   }
 }
 
 function App() {
   const [count, setCount] = useState(0)
   const [username, setUsername] = useState('');
-  const [room, setRoom] = useState(null);
+  const [room, setRoom] = useState(sampleRoom);
   const [message, setMessage] = useState('');
 
   const [timer, setTimer] = useState(null);
   const messageInputRef = useRef(null);
+  const ansRef = useRef(null);
 
   useEffect(()=>{
     return ()=>socket.close();
@@ -53,6 +56,9 @@ function App() {
     socket.on('message-update', (message)=>{
       setRoom(pre=>({...pre, messages:message}));
     })
+    socket.on('question-update', (message)=>{
+      setRoom(pre=>({...pre, question:message}))
+    } );
   }
 
   useEffect(()=>{
@@ -68,6 +74,14 @@ function App() {
     if(messageInputRef.current){
       messageInputRef.current.value = '';
       messageInputRef.current.focus();
+    }
+  }
+
+  const handleKeydown = (e)=>{
+    console.log('handling key down')
+    if(e.code == 'Enter'){
+      console.log(ansRef.current.value)
+      socket.emit('ans-update', {ans: ansRef.current.value} )
     }
   }
 
@@ -125,15 +139,22 @@ function App() {
           </div>
           </div>}
       </div>}
-      {room && room?.gameStarted && <div style={{width:'400px', minHeight:'200px'}}>
+      {room && room?.gameStarted && <div style={{width:'400px', minHeight:'500px'}}>
         Game Started 
+        {/* questions section */}
+        {room?.question && <div>
+          <QuestionTimer timeLeft={room?.question?.maxTime} />
+          <span className={`flag flag-${room?.question?.countryCode}`} />
+          <p>{room?.question?.hint}</p>
+          <input ref={ansRef} style={{height:'30px', fontSize:'15px'}} onKeyDown={handleKeydown} />
+        </div> }
+        {/* chat section */}
+        <div>
 
+        </div>
 
         </div>}
-      {/* questions section */}
 
-      {/* chat section */}
-      <div></div>
       
     </>
   )
@@ -156,7 +177,18 @@ const Timer = ({ startsIn }) => {
 };
 
 const QuestionTimer = ({timeLeft})=>{
+  const [timer, setTimer] = useState(timeLeft);
 
+  useEffect(() => {
+    setTimer(timeLeft);
+    const interval = setInterval(() => {
+      setTimer((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timeLeft]);
+
+  return <h3>{timer}</h3>;
 }
 
 

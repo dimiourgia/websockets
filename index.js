@@ -23,6 +23,14 @@ const users = [];
 const messages = {};
 const rooms = [];
 const maxWaitTime = 300; //in seconds
+const questions = [
+    {
+        countryCode: 'in',
+        totalLetters: 5,
+        hind: 'I-N--A',
+        ans: 'INDIA',
+    }
+]
 
 io.on('connection', (socket)=>{
     console.log('new user connection requested..', socket.id)
@@ -78,17 +86,27 @@ io.on('connection', (socket)=>{
              socket.emit('joined', room);
         }
 
-        setInterval(()=>{
+        const interval = setInterval(()=>{
             //check if a room need to start the game
             rooms.forEach(room=>{
                 diff = maxWaitTime-Math.floor(Math.abs(new Date() - room.countStartedAt)/1000);
                 if(!room.gameStarted && diff <= 1){
                     room.gameStarted = true;
+                    startQuestionInterval();
                     room.startsIn = 0;
                     io.in(room.roomName).emit('room-update', room);
+                    clearInterval(interval);
                 }
             })
         },1000);
+
+        function startQuestionInterval(){
+            const interval = setInterval(()=>{
+                
+            },10000)
+        }
+
+
         
     });
 
